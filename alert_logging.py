@@ -8,26 +8,26 @@ import geoip2.database
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from influxdb import InfluxDBClient
-from templates import alert_template
-from secrets import influx_db_name, influx_host, influx_port, influx_user, influx_password, mail_host, mail_port, mail_password, mail_user, alert_user, city_db_path, default_location
+from templates import alert_template, email_template
+from secrets import influx_db_name, influx_host, influx_port, influx_user, influx_password, mail_host, mail_port, mail_password, mail_user, alert_user, city_db_path, default_location, local_range
 
 poll_frequency = 30  # Frequency in seconds
-local_range = "192.168."
 geoip_city = geoip2.database.Reader(city_db_path)
 ssl_context = ssl.create_default_context()
+alert_severity = [1,2]
 
 
-def send_mail(msg, args):
+def send_mail(args):
     with smtplib.SMTP_SSL(host=mail_host, port=mail_port, context=ssl_context) as mail_server:
         mail_server.login(mail_user, mail_password)
         main_msg = MIMEMultipart()
-        main_msg['Subject'] = "IDS Alert"
-        main_msg['To'] = alert_user
+        main_msg['Subject'] = args["Subject"]
+        main_msg['To'] = args["To"]
         main_msg['From'] = mail_user
-        main_msg.preamble = "IDS alert triggered by suricata."
-        msg_body = MIMEText(msg.substitute(args))
+        main_msg.preamble = args["preamble"]
+        msg_body = MIMEText(email_template.substitute(args["msg_args"]))
         main_msg.attach(msg_body)
-        mail_server.sendmail(mail_user, alert_user, main_msg)
+        mail_server.sendmail(mail_user, args["To"], main_msg)
 
 def tail(f):
     while True:
@@ -59,6 +59,7 @@ def log_alert(new_data):
     dest_location = get_location(dest_ip)
     
     try:
+        # TODO: move this parsing into a more generalized schema based function
         point = {"measurement": "alert",
                   "time": new_data["timestamp"],
                   "tags": {"event_type": new_data["event_type"],
@@ -96,6 +97,26 @@ def log_alert(new_data):
         print(new_data)
 
 
+def email_alert(msg):
+    """Screen the msg based on severity prior to sending an alert email"""
+    try:
+        severity = msg["alert"]["severity"]
+        if severity in alert_severity:
+            alert_args = msg["alert"]
+            alert_args["timestamp"] = msg["timestamp"]
+            alert_args["src_ip"] = msg["src_ip"]
+            alert_args["dest_ip"] = msg["dest_ip"]
+            alert_msg = alert_template.substitute(alert_args)
+            msg_args = {"To": alert_user,
+                        "Subject": "Severity %s IDS event" % severity,
+                        "preamble": "IDS event detected by suricata",
+                        "msg_args": {"msg_body": alert_msg}
+                        }
+            send_mail(msg_args)
+    except Exception as e:
+        print("Error Emailing Alert")
+        print(e)
+
 def main(args):
     with open(args[1], 'r') as f:
         for line in tail(f):
@@ -103,6 +124,7 @@ def main(args):
                 msg = json.loads(line)
                 if msg["event_type"] == "alert":
                     log_alert(msg)
+                    email_alert(msg)
             except Exception as e:
                 #FIXME: better handling here - stats msgs seem to break it
                 pass
