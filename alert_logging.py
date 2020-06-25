@@ -1,3 +1,6 @@
+"""
+alert_logging.py
+"""
 import sys
 import ssl
 import time
@@ -11,30 +14,35 @@ from influxdb import InfluxDBClient
 from templates import alert_template, email_template
 from secrets import influx_db_name, influx_host, influx_port, influx_user, influx_password, mail_host, mail_port, mail_password, mail_user, alert_user, city_db_path, default_location, local_range
 
-poll_frequency = 30  # Frequency in seconds
+POLL_FREQ = 30  # Frequency in seconds
 geoip_city = geoip2.database.Reader(city_db_path)
 ssl_context = ssl.create_default_context()
 alert_severity = [1,2]
 
 
 def send_mail(args):
-    with smtplib.SMTP_SSL(host=mail_host, port=mail_port, context=ssl_context) as mail_server:
-        mail_server.login(mail_user, mail_password)
-        main_msg = MIMEMultipart()
-        main_msg['Subject'] = args["Subject"]
-        main_msg['To'] = args["To"]
-        main_msg['From'] = mail_user
-        main_msg.preamble = args["preamble"]
-        msg_body = MIMEText(email_template.substitute(args["msg_args"]))
-        main_msg.attach(msg_body)
-        mail_server.sendmail(mail_user, args["To"], main_msg)
+    try:
+        with smtplib.SMTP_SSL(host=mail_host, port=mail_port, context=ssl_context) as mail_server:
+            mail_server.login(mail_user, mail_password)
+            main_msg = MIMEMultipart()
+            main_msg['Subject'] = args["Subject"]
+            main_msg['To'] = args["To"]
+            main_msg['From'] = mail_user
+            main_msg.preamble = args["preamble"]
+            msg_body = MIMEText(email_template.substitute(args["msg_args"]), 'html')
+            main_msg.attach(msg_body)
+            mail_server.send_message(main_msg, mail_user, args["To"])
+    except Exception as e:
+        print("Email Error")
+        print(e)
 
+        
 def tail(f):
     while True:
         where = f.tell()
         line = f.readline()
         if not line or line == "\n":
-            time.sleep(poll_frequency)
+            time.sleep(POLL_FREQ)
             f.seek(where)
         else:
             yield line
@@ -50,7 +58,8 @@ def get_location(ip):
         # FIXME: reference actual AddressNotFoundError.
         # print("address not found for %s" % ip)
         return dict(country="", city="", geohash="")
-    
+
+
 def log_alert(new_data):
     # Try and geolocate source and dest IP
     src_ip = new_data["src_ip"]
@@ -61,12 +70,12 @@ def log_alert(new_data):
     try:
         # TODO: move this parsing into a more generalized schema based function
         point = {"measurement": "alert",
-                  "time": new_data["timestamp"],
-                  "tags": {"event_type": new_data["event_type"],
-                           "severity": new_data["alert"]["severity"],
-                           "src_country": src_location["country"],
-                           "dest_country": dest_location["country"],
-                           "src_geohash": src_location["geohash"],
+                "time": new_data["timestamp"],
+                "tags": {"event_type": new_data["event_type"],
+                         "severity": new_data["alert"]["severity"],
+                         "src_country": src_location["country"],
+                         "dest_country": dest_location["country"],
+                         "src_geohash": src_location["geohash"],
                            "dest_geohash": dest_location["geohash"]
                   },
                   "proto": new_data["proto"],
@@ -116,6 +125,7 @@ def email_alert(msg):
     except Exception as e:
         print("Error Emailing Alert")
         print(e)
+        print(msg)
 
 def main(args):
     with open(args[1], 'r') as f:
@@ -133,6 +143,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+
     args_ = sys.argv
     if len(args_) < 2:
         print("Usage: alert_logging.py filename")
