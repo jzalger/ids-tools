@@ -1,6 +1,7 @@
 # Private data
 secrets.py
 
+*~
 # logs
 *.log
 *.out

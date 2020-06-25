@@ -127,7 +127,6 @@ def main(args):
                     email_alert(msg)
             except Exception as e:
                 #FIXME: better handling here - stats msgs seem to break it
-                pass
                 print("Error in parsing json message")
                 print(e)
                 print(msg)
