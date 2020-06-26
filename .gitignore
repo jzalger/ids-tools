@@ -1,6 +1,6 @@
 # Private data
 secrets.py
-
+config.yaml
 *~
 # logs
 *.log
