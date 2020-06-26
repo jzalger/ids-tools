@@ -18,7 +18,7 @@ from templates import alert_template, email_template
 ssl_context = ssl.create_default_context()
 
 
-def send_mail(args):
+def send_mail(args, config):
     with smtplib.SMTP_SSL(host=config["mail"]["host"], port=config["mail"]["port"], context=ssl_context) as mail_server:
         mail_server.login(config["mail"]["user"], config["mail"]["password"])
         main_msg = MIMEMultipart()
@@ -42,11 +42,11 @@ def tail(f, poll_frequency):
             yield line
 
 
-class Monitor(object):
+class Monitor():
 
     def __init__(self, config_file, logfile):
         self.config = yaml.safe_load(open(config_file, "r"))
-        self.geoip_city = geoip2.database.Reader(config["city_db_path"]) 
+        self.geoip_city = geoip2.database.Reader(self.config["city_db_path"]) 
         self.logfile = logfile
         self.handlers = {"alert": self.handle_alert, "stats": self.handle_stats}
         self.db_con = psycopg2.connect(database=self.config["postgres"]["db_name"],
@@ -56,10 +56,10 @@ class Monitor(object):
                                        port=self.config["postgres"]["port"])
         
     def get_location(self, ip):
-        if config["local_range"] in ip:
-            return config["default_location"]
+        if self.config["local_range"] in ip:
+            return self.config["default_location"]
         try:
-            query = geoip_city.city(ip)
+            query = self.geoip_city.city(ip)
             ghash = geohash.encode(query.location.latitude, query.location.longitude)
             return dict(country=query.country.name, city=query.city.name, geohash=ghash)
         except:
@@ -71,24 +71,35 @@ class Monitor(object):
     def handle_alert(self, event):
         """Manages parsing, logging, enrichments, and alerting of alerts"""
         # Location enrichment
-        dest_location = self.get_location(event["dest_ip"])
-        src_location = self.get_location(event["src_ip"])
+        try:
+            location = {"dest_location": self.get_location(event["dest_ip"]),
+                    "src_location": self.get_location(event["src_ip"])}
         
-        severity = event["alert"]["severity"]
-        if severity in config["mail"]["alert_severity"]:
-            self.email_alert(event)
+            # TODO: Add more enrichment from apivoid
+            self.insert_alert(event, location, dict())
         
+            severity = event["alert"]["severity"]
+            if severity in self.config["mail"]["alert_severity"]:
+                self.email_alert(event)
+                
+        except Exception as e:
+            print("error handling alert")
+            print(e)
 
     def insert_alert(self, data, location, extra):
         """
         Inserts data into the database backend, as JSON blobs
         data, location, and extra args should be python dictionaries
         """
-        insert = "insert into alerts(data, location, extras) values(%s);"
-        cursor = self.db_con.cursor()
-        cursor.execute(insert, (json.dumps(data), json.dumps(location), json.dumps(extra)))
-        self.db_con.commit()
-        cursor.close()
+        try:
+            insert = "insert into alerts(data, location, extra) values(%s, %s, %s);"
+            cursor = self.db_con.cursor()
+            cursor.execute(insert, (json.dumps(data), json.dumps(location), json.dumps(extra)))
+            self.db_con.commit()
+            cursor.close()
+        except Exception as e:
+            print("Insert exception")
+            print(e)
         
     def email_alert(self, event):
         """Screen the msg based on severity prior to sending an alert email"""
@@ -103,7 +114,7 @@ class Monitor(object):
                         "preamble": "IDS event detected by suricata",
                         "msg_args": {"msg_body": alert_msg}
                         }
-            send_mail(msg_args)
+            send_mail(msg_args, self.config)
         except Exception as e:
             print("Error Emailing Alert")
             print(e)
