@@ -6,32 +6,33 @@ import ssl
 import time
 import json
 import smtplib
+import yaml
 import geohash
 import geoip2.database
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from influxdb import InfluxDBClient
 from templates import alert_template, email_template
-from secrets import influx_db_name, influx_host, influx_port, influx_user, influx_password, mail_host, mail_port, mail_password, mail_user, alert_user, city_db_path, default_location, local_range
 
+config = dict()
 POLL_FREQ = 30  # Frequency in seconds
-geoip_city = geoip2.database.Reader(city_db_path)
+geoip_city = None
 ssl_context = ssl.create_default_context()
-alert_severity = [1,2]
+alert_severity = [1, 2]
 
 
 def send_mail(args):
     try:
-        with smtplib.SMTP_SSL(host=mail_host, port=mail_port, context=ssl_context) as mail_server:
-            mail_server.login(mail_user, mail_password)
+        with smtplib.SMTP_SSL(host=config["mail"]["host"], port=config["mail"]["port"], context=ssl_context) as mail_server:
+            mail_server.login(config["mail"]["user"], config["mail"]["password"])
             main_msg = MIMEMultipart()
             main_msg['Subject'] = args["Subject"]
             main_msg['To'] = args["To"]
-            main_msg['From'] = mail_user
+            main_msg['From'] = config["mail"]["user"]
             main_msg.preamble = args["preamble"]
             msg_body = MIMEText(email_template.substitute(args["msg_args"]), 'html')
             main_msg.attach(msg_body)
-            mail_server.send_message(main_msg, mail_user, args["To"])
+            mail_server.send_message(main_msg, config["mail"]["user"], args["To"])
     except Exception as e:
         print("Email Error")
         print(e)
@@ -48,8 +49,8 @@ def tail(f):
             yield line
 
 def get_location(ip):
-    if local_range in ip:
-        return default_location
+    if config["local_range"] in ip:
+        return config["default_location"]
     try:
         query = geoip_city.city(ip)
         ghash = geohash.encode(query.location.latitude, query.location.longitude)
@@ -68,7 +69,7 @@ def log_alert(new_data):
     dest_location = get_location(dest_ip)
     
     try:
-        # TODO: move this parsing into a more generalized schema based function
+        # TODO: move this parsing into a more generalized schema based function, add all fields 
         point = {"measurement": "alert",
                 "time": new_data["timestamp"],
                 "tags": {"event_type": new_data["event_type"],
@@ -76,7 +77,7 @@ def log_alert(new_data):
                          "src_country": src_location["country"],
                          "dest_country": dest_location["country"],
                          "src_geohash": src_location["geohash"],
-                           "dest_geohash": dest_location["geohash"]
+                         "dest_geohash": dest_location["geohash"]
                   },
                   "proto": new_data["proto"],
                   "fields": {"signature_id": new_data["alert"]["signature_id"],
@@ -98,7 +99,7 @@ def log_alert(new_data):
         return
 
     try:
-        client = InfluxDBClient(influx_host, influx_port, influx_user, influx_password, influx_db_name)
+        client = InfluxDBClient(config["influx"]["host"], config["influx"]["port"], config["influx"]["user"], config["influx"]["password"], config["influx"]["db_name"])
         client.write_points([point])
     except Exception as e:
         print("Error writing to influxdb")
@@ -116,7 +117,7 @@ def email_alert(msg):
             alert_args["src_ip"] = msg["src_ip"]
             alert_args["dest_ip"] = msg["dest_ip"]
             alert_msg = alert_template.substitute(alert_args)
-            msg_args = {"To": alert_user,
+            msg_args = {"To": config["mail"]["alert_user"],
                         "Subject": "Severity %s IDS event" % severity,
                         "preamble": "IDS event detected by suricata",
                         "msg_args": {"msg_body": alert_msg}
@@ -128,13 +129,17 @@ def email_alert(msg):
         print(msg)
 
 def main(args):
+    global config, geoip_city
+    config = yaml.safe_load(open(args[2], "r"))
+    geoip_city = geoip2.database.Reader(config["city_db_path"])
     with open(args[1], 'r') as f:
         for line in tail(f):
             try:
                 msg = json.loads(line)
                 if msg["event_type"] == "alert":
                     log_alert(msg)
-                    email_alert(msg)
+                    if config["email"]["enabled"]:
+                        email_alert(msg)
             except Exception as e:
                 #FIXME: better handling here - stats msgs seem to break it
                 print("Error in parsing json message")
@@ -143,9 +148,8 @@ def main(args):
 
 
 if __name__ == "__main__":
-
     args_ = sys.argv
     if len(args_) < 2:
-        print("Usage: alert_logging.py filename")
+        print("Usage: alert_logging.py log_filename config.yaml")
         sys.exit()
     main(args_)

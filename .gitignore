@@ -5,6 +5,7 @@ config.yaml
 # logs
 *.log
 *.out
+*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
