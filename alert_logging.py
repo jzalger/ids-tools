@@ -6,6 +6,7 @@ import ssl
 import time
 import json
 import smtplib
+import requests
 import yaml
 import geohash
 import psycopg2
@@ -61,26 +62,107 @@ class Monitor():
         try:
             query = self.geoip_city.city(ip)
             ghash = geohash.encode(query.location.latitude, query.location.longitude)
-            return dict(country=query.country.name, city=query.city.name, geohash=ghash)
         except:
             return dict(country="", city="", geohash="")
 
+    def get_reputation(self, param, query_type="ip"):
+        data = self._query_reputation(param, query_type=query_type)
+        if data is None:
+            return (None, None)
+
+        # TODO: Shift this to a function mapping
+        if query_type == "ip":
+            analysis = self._analyze_ip_reputation(data)
+        elif query_type == "domain":
+            analysis = self._analyze_domain_reputation(data)
+        else:
+            raise ValueError
+            
+        if analysis is True:
+            return(True, data)
+        else:
+            return(False, data)
+        
+    def _query_reputation(self, param, query_type="ip"):
+        """
+        Queries the reputation from apivoid.
+        param should be a string (ip, domain name, etc)
+        report_type = ip | domain
+        """
+        try:
+            cfg = self.config["apivoid"]
+            url = cfg["url"][query_type] % (cfg["key"], param)
+            r = requests.get(url=url)
+            data = r.json()
+            if data["success"]:
+                return data
+            else:
+                return None
+        except Exception as e:
+            print("Error querying reputation")
+            print(e)
+            
+    def _analyze_domain_reputation(self, data):
+        """
+        Assess domain reputation to make hostility decision.
+        Based on the apivoid service
+        """
+        abnormal_domain = False
+        suspect_country = False
+        blacklists = data["data"]["report"]["blacklists"]["detections"]
+        if True in [cat for cat in data["data"]["report"]["category"]]:
+            abnormal_domain = True
+        if data["data"]["report"]["server"]["country_name"] in self.config["suspect_countries"]:
+            suspect_country = True
+        if blacklists > 0 or abnormal_domain or suspect_country:
+            return True
+        else:
+            return False
+            
+    def _analyze_ip_reputation(self, data):
+        """
+        Assess an IP reputation response and make a hostility decision
+        Based on using the apivoid service.
+        """
+        # Check blacklists and known anonymization hosts
+        blacklists = data["data"]["report"]["blacklists"]["detections"]
+        if True in [anon_type for anon_type in data["report"]["anonymity"]]:
+            is_anon = True
+        
+        if blacklists > 0 or is_anon:
+            return True
+        else:
+            return False
+        
+    def handle_ssh(self, event):
+        pass
+
+    def handle_anomaly(self, event):
+        pass
+        
     def handle_stats(self, event):
         pass
 
     def handle_alert(self, event):
         """Manages parsing, logging, enrichments, and alerting of alerts"""
-        # Location enrichment
         try:
+            # Enrich the alert from other sources
             location = {"dest_location": self.get_location(event["dest_ip"]),
                     "src_location": self.get_location(event["src_ip"])}
-        
-            # TODO: Add more enrichment from apivoid
+
+            # If alert related to questionable WAN traffic, assess IP reputation
+            # TODO: add a mapping between categories to analysis handlers.
+            # Perhaps a separate class for analysis
+            reputation = None
+            if "ET DNS" in event["alert"]["signature"]:
+                domain = event["dns"]["query"][0]["rrname"]
+                reputation = self.get_reputation(domain, query_type="domain")
+            
             self.insert_alert(event, location, dict())
         
             severity = event["alert"]["severity"]
-            if severity in self.config["mail"]["alert_severity"]:
-                self.email_alert(event)
+            if severity in self.config["mail"]["alert_severity"] and reputation[0] is True:
+                self.email_alert(event, extra=reputation[1])
                 
         except Exception as e:
             print("error handling alert")
@@ -101,13 +183,14 @@ class Monitor():
             print("Insert exception")
             print(e)
         
-    def email_alert(self, event):
+    def email_alert(self, event, extra=None):
         """Screen the msg based on severity prior to sending an alert email"""
         try:
             alert_args = event["alert"]
             alert_args["timestamp"] = event["timestamp"]
             alert_args["src_ip"] = event["src_ip"]
             alert_args["dest_ip"] = event["dest_ip"]
+            alert_args["extra"] = extra
             alert_msg = alert_template.substitute(alert_args)
             msg_args = {"To": self.config["mail"]["alert_user"],
                         "Subject": "Severity %s IDS event" % event["alert"]["severity"],
@@ -129,9 +212,10 @@ class Monitor():
                     handler = self.handlers[event_type]
                     handler(event)
                 except Exception as e:
-                    print("Error monitoring log")
-                    print(e)
-                    print(event)
+                    pass
+                    # print("Error monitoring log")
+                    # print(e)
+                    # print(event)
 
 
 def main(args):

@@ -6,6 +6,8 @@ email_template = Template("""
 <head></head>
 <body>
 ${msg_body}
+<div></div>
+<div>${extra}</div>
 </body>
 </html>
 """)
