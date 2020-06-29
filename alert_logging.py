@@ -69,7 +69,7 @@ class Monitor:
     def get_reputation(self, param, query_type="ip"):
         data = self._query_reputation(param, query_type=query_type)
         if data is None:
-            return None, None
+            return dict(reputation="unknown", data=None)
 
         # TODO: Shift this to a function mapping
         if query_type == "ip":
@@ -155,14 +155,25 @@ class Monitor:
             # If alert related to questionable WAN traffic, assess IP reputation
             # TODO: add a mapping between categories to analysis handlers.
             # Perhaps a separate class for analysis
-            reputation = dict(reputation="neutral", data=None)
-            if "ET DNS" in event["alert"]["signature"]:
-                domain = event["dns"]["query"][0]["rrname"]
-                reputation = self.get_reputation(domain, query_type="domain")
-            
-            self.insert_alert(event, location, reputation)
-        
             severity = event["alert"]["severity"]
+            reputation = dict(reputation="neutral", data=None)
+
+            if severity in self.config["mail"]["alert_severity"]:
+                if "ET DNS" in event["alert"]["signature"]:
+                    domain = event["dns"]["query"][0]["rrname"]
+                    reputation = self.get_reputation(domain, query_type="domain")
+                elif self.config["local_range"] not in event["source_ip"]:
+                    reputation = self.get_reputation(event["source_ip"], query_type="ip")
+                    pass
+                elif self.config["local_range"] not in event["dest_ip"]:
+                    reputation = self.get_reputation(event["dest_ip"], query_type="ip")
+                else:
+                    pass
+
+            # Log To Database
+            self.insert_alert(event, location, reputation)
+
+            # Trigger Alerting (ie email)
             if severity in self.config["mail"]["alert_severity"]:
                 # TODO: Add further screening based on reputation analysis
                 self.email_alert(event, extra=reputation)
