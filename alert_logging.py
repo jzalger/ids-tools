@@ -43,8 +43,7 @@ def tail(f, poll_frequency):
             yield line
 
 
-class Monitor():
-
+class Monitor:
     def __init__(self, config_file, logfile):
         self.config = yaml.safe_load(open(config_file, "r"))
         self.geoip_city = geoip2.database.Reader(self.config["city_db_path"]) 
@@ -62,13 +61,14 @@ class Monitor():
         try:
             query = self.geoip_city.city(ip)
             ghash = geohash.encode(query.location.latitude, query.location.longitude)
+            return dict(country=query.country.name, city=query.city.name, geohash=ghash)
         except:
             return dict(country="", city="", geohash="")
 
     def get_reputation(self, param, query_type="ip"):
         data = self._query_reputation(param, query_type=query_type)
         if data is None:
-            return (None, None)
+            return None, None
 
         # TODO: Shift this to a function mapping
         if query_type == "ip":
@@ -79,9 +79,9 @@ class Monitor():
             raise ValueError
             
         if analysis is True:
-            return(True, data)
+            return dict(reputation="poor", data=data)
         else:
-            return(False, data)
+            return dict(reputation="neutral", data=data)
         
     def _query_reputation(self, param, query_type="ip"):
         """
@@ -126,6 +126,7 @@ class Monitor():
         """
         # Check blacklists and known anonymization hosts
         blacklists = data["data"]["report"]["blacklists"]["detections"]
+        is_anon = False
         if True in [anon_type for anon_type in data["report"]["anonymity"]]:
             is_anon = True
         
@@ -153,19 +154,17 @@ class Monitor():
             # If alert related to questionable WAN traffic, assess IP reputation
             # TODO: add a mapping between categories to analysis handlers.
             # Perhaps a separate class for analysis
-            reputation = None
+            reputation = dict(reputation="neutral", data=None)
             if "ET DNS" in event["alert"]["signature"]:
                 domain = event["dns"]["query"][0]["rrname"]
                 reputation = self.get_reputation(domain, query_type="domain")
             
-            self.insert_alert(event, location, dict())
+            self.insert_alert(event, location, reputation)
         
             severity = event["alert"]["severity"]
             if severity in self.config["mail"]["alert_severity"]:
-                if "ET DNS" in event["alert"]["signature"] and reputation[0] is False:
-                    pass
-                else:
-                    self.email_alert(event, extra=reputation[1])
+                # TODO: Add further screening based on reputation analysis
+                self.email_alert(event, extra=reputation)
                 
         except Exception as e:
             print("error handling alert")
