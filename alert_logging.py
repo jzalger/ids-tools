@@ -161,6 +161,8 @@ class Monitor:
                 if "dns" in event.keys():
                     try:
                         domain = event["dns"]["query"][0]["rrname"]
+                        if "http" in domain:
+                            domain = domain.split('//')[-1].split('/')[0]
                         reputation = self.get_reputation(domain, query_type="domain")
                     except Exception as e:
                         # TODO: Remove me after confirming the domain extraction
