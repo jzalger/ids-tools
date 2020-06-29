@@ -208,7 +208,7 @@ class Monitor:
             msg_args = {"To": self.config["mail"]["alert_user"],
                         "Subject": "Severity %s IDS event" % event["alert"]["severity"],
                         "preamble": "IDS event detected by suricata",
-                        "msg_args": {"msg_body": alert_msg, "extra": extra}
+                        "msg_args": {"msg_body": alert_msg, "extra": [extra, event]}
                         }
             send_mail(msg_args, self.config)
         except Exception as e:
