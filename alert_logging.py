@@ -204,12 +204,12 @@ class Monitor:
             alert_args["timestamp"] = event["timestamp"]
             alert_args["src_ip"] = event["src_ip"]
             alert_args["dest_ip"] = event["dest_ip"]
-            alert_args["extra"] = extra
             alert_msg = alert_template.substitute(alert_args)
             msg_args = {"To": self.config["mail"]["alert_user"],
                         "Subject": "Severity %s IDS event" % event["alert"]["severity"],
                         "preamble": "IDS event detected by suricata",
-                        "msg_args": {"msg_body": alert_msg}
+                        "msg_args": {"msg_body": alert_msg},
+                        "extra": extra
                         }
             send_mail(msg_args, self.config)
         except Exception as e:
