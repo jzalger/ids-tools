@@ -161,8 +161,11 @@ class Monitor():
             self.insert_alert(event, location, dict())
         
             severity = event["alert"]["severity"]
-            if severity in self.config["mail"]["alert_severity"] and reputation[0] is True:
-                self.email_alert(event, extra=reputation[1])
+            if severity in self.config["mail"]["alert_severity"]:
+                if "ET DNS" in event["alert"]["signature"] and reputation[0] is False:
+                    pass
+                else:
+                    self.email_alert(event, extra=reputation[1])
                 
         except Exception as e:
             print("error handling alert")
