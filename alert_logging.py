@@ -110,41 +110,30 @@ class Monitor:
         """
         abnormal_domain = False
         suspect_country = False
-        try:
-            blacklists = data["data"]["report"]["blacklists"]["detections"]
-            if True in [cat for cat in data["data"]["report"]["category"]]:
-                abnormal_domain = True
-            if data["data"]["report"]["server"]["country_name"] in self.config["suspect_countries"]:
-                suspect_country = True
-            if blacklists > 0 or abnormal_domain or suspect_country:
-                return True
-            else:
-                return False
-        except Exception as e:
-            print("Error analyzing domain reputation")
-            print(e)
-            print(data)
-            
+        blacklists = data["data"]["report"]["blacklists"]["detections"]
+        if True in [cat for cat in data["data"]["report"]["category"]]:
+            abnormal_domain = True
+        if data["data"]["report"]["server"]["country_name"] in self.config["suspect_countries"]:
+            suspect_country = True
+        if blacklists > 0 or abnormal_domain or suspect_country:
+            return True
+        else:
+            return False
+
     def _analyze_ip_reputation(self, data):
         """
         Assess an IP reputation response and make a hostility decision
         Based on using the apivoid service.
         """
         # Check blacklists and known anonymization hosts
-        try:
-            blacklists = data["data"]["report"]["blacklists"]["detections"]
-            is_anon = False
-            if True in [anon_type for anon_type in data["report"]["anonymity"]]:
-                is_anon = True
-
-            if blacklists > 0 or is_anon:
-                return True
-            else:
-                return False
-        except Exception as e:
-            print("Error analyzing ip reputation")
-            print(e)
-            print(data)
+        blacklists = data["data"]["report"]["blacklists"]["detections"]
+        is_anon = False
+        if True in [anon_type for anon_type in data["data"]["report"]["anonymity"]]:
+            is_anon = True
+        if blacklists > 0 or is_anon:
+            return True
+        else:
+            return False
         
     def handle_ssh(self, event):
         pass
