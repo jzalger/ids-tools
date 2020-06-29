@@ -7,6 +7,7 @@ import time
 import json
 import smtplib
 import requests
+import requests_cache
 import yaml
 import geohash
 import psycopg2
@@ -15,7 +16,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from templates import alert_template, email_template
 
-
+requests_cache.install_cache(expire_after=1800)
 ssl_context = ssl.create_default_context()
 
 
