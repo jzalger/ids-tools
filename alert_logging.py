@@ -110,15 +110,20 @@ class Monitor:
         """
         abnormal_domain = False
         suspect_country = False
-        blacklists = data["data"]["report"]["blacklists"]["detections"]
-        if True in [cat for cat in data["data"]["report"]["category"]]:
-            abnormal_domain = True
-        if data["data"]["report"]["server"]["country_name"] in self.config["suspect_countries"]:
-            suspect_country = True
-        if blacklists > 0 or abnormal_domain or suspect_country:
-            return True
-        else:
-            return False
+        try:
+            blacklists = data["data"]["report"]["blacklists"]["detections"]
+            if True in [cat for cat in data["data"]["report"]["category"]]:
+                abnormal_domain = True
+            if data["data"]["report"]["server"]["country_name"] in self.config["suspect_countries"]:
+                suspect_country = True
+            if blacklists > 0 or abnormal_domain or suspect_country:
+                return True
+            else:
+                return False
+        except Exception as e:
+            print("Error analyzing domain reputation")
+            print(e)
+            print(data)
             
     def _analyze_ip_reputation(self, data):
         """
@@ -126,15 +131,20 @@ class Monitor:
         Based on using the apivoid service.
         """
         # Check blacklists and known anonymization hosts
-        blacklists = data["data"]["report"]["blacklists"]["detections"]
-        is_anon = False
-        if True in [anon_type for anon_type in data["report"]["anonymity"]]:
-            is_anon = True
-        
-        if blacklists > 0 or is_anon:
-            return True
-        else:
-            return False
+        try:
+            blacklists = data["data"]["report"]["blacklists"]["detections"]
+            is_anon = False
+            if True in [anon_type for anon_type in data["report"]["anonymity"]]:
+                is_anon = True
+
+            if blacklists > 0 or is_anon:
+                return True
+            else:
+                return False
+        except Exception as e:
+            print("Error analyzing ip reputation")
+            print(e)
+            print(data)
         
     def handle_ssh(self, event):
         pass
@@ -156,15 +166,19 @@ class Monitor:
             # TODO: add a mapping between categories to analysis handlers.
             # Perhaps a separate class for analysis
             severity = event["alert"]["severity"]
-            reputation = dict(reputation="neutral", data=None)
+            reputation = dict(reputation="unknown", data=None)
 
             if severity in self.config["mail"]["alert_severity"]:
-                if "ET DNS" in event["alert"]["signature"]:
-                    domain = event["dns"]["query"][0]["rrname"]
-                    reputation = self.get_reputation(domain, query_type="domain")
+                if "dns" in event.keys():
+                    try:
+                        domain = event["dns"]["query"][0]["rrname"]
+                        reputation = self.get_reputation(domain, query_type="domain")
+                    except Exception as e:
+                        # TODO: Remove me after confirming the domain extraction
+                        print("Could not get domain reputation for event")
+                        print(e)
                 elif self.config["local_range"] not in event["src_ip"]:
                     reputation = self.get_reputation(event["src_ip"], query_type="ip")
-                    pass
                 elif self.config["local_range"] not in event["dest_ip"]:
                     reputation = self.get_reputation(event["dest_ip"], query_type="ip")
                 else:
@@ -174,7 +188,7 @@ class Monitor:
             self.insert_alert(event, location, reputation)
 
             # Trigger Alerting (ie email)
-            if severity in self.config["mail"]["alert_severity"]:
+            if severity in self.config["mail"]["alert_severity"] and (reputation == "unknown" or reputation == "poor"):
                 # TODO: Add further screening based on reputation analysis
                 self.email_alert(event, extra=reputation)
                 
