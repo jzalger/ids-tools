@@ -162,8 +162,8 @@ class Monitor:
                 if "ET DNS" in event["alert"]["signature"]:
                     domain = event["dns"]["query"][0]["rrname"]
                     reputation = self.get_reputation(domain, query_type="domain")
-                elif self.config["local_range"] not in event["source_ip"]:
-                    reputation = self.get_reputation(event["source_ip"], query_type="ip")
+                elif self.config["local_range"] not in event["src_ip"]:
+                    reputation = self.get_reputation(event["src_ip"], query_type="ip")
                     pass
                 elif self.config["local_range"] not in event["dest_ip"]:
                     reputation = self.get_reputation(event["dest_ip"], query_type="ip")
