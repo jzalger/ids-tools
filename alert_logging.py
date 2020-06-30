@@ -157,29 +157,28 @@ class Monitor:
             severity = event["alert"]["severity"]
             reputation = dict(reputation="unknown", data=None)
 
-            if severity in self.config["mail"]["alert_severity"]:
-                if "dns" in event.keys():
-                    try:
-                        domain = event["dns"]["query"][0]["rrname"]
-                        if "http" in domain:
-                            domain = domain.split('//')[-1].split('/')[0]
-                        reputation = self.get_reputation(domain, query_type="domain")
-                    except Exception as e:
-                        # TODO: Remove me after confirming the domain extraction
-                        print("Could not get domain reputation for event")
-                        print(e)
-                elif self.config["local_range"] not in event["src_ip"]:
-                    reputation = self.get_reputation(event["src_ip"], query_type="ip")
-                elif self.config["local_range"] not in event["dest_ip"]:
-                    reputation = self.get_reputation(event["dest_ip"], query_type="ip")
-                else:
-                    pass
+            if "dns" in event.keys():
+                try:
+                    domain = event["dns"]["query"][0]["rrname"]
+                    if "http" in domain:
+                        domain = domain.split('//')[-1].split('/')[0]
+                    reputation = self.get_reputation(domain, query_type="domain")
+                except Exception as e:
+                    # TODO: Remove me after confirming the domain extraction
+                    print("Could not get domain reputation for event")
+                    print(e)
+            elif self.config["local_range"] not in event["src_ip"]:
+                reputation = self.get_reputation(event["src_ip"], query_type="ip")
+            elif self.config["local_range"] not in event["dest_ip"]:
+                reputation = self.get_reputation(event["dest_ip"], query_type="ip")
+            else:
+                pass
 
             # Log To Database
             self.insert_alert(event, location, reputation)
 
             # Trigger Alerting (ie email)
-            if severity in self.config["mail"]["alert_severity"] and (reputation == "unknown" or reputation == "poor"):
+            if severity in self.config["mail"]["alert_severity"] and (reputation == "unknown" or reputation == "poor") or reputation == "poor":
                 # TODO: Add further screening based on reputation analysis
                 self.email_alert(event, extra=reputation)
                 
