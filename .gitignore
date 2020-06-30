@@ -1,12 +1,14 @@
 # Private data
 secrets.py
 config.yaml
+*#
 *~
 # logs
 *.log
 *.out
 *.json
-
+.idea
+cache.sqlite
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
