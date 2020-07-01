@@ -1,6 +1,5 @@
 from string import Template
 
-# TODO: Add HTML wrapping to templates
 email_template = Template(""" 
 <html>
 <head></head>

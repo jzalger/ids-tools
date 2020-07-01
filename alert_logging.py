@@ -1,5 +1,6 @@
 """
 alert_logging.py
+J. Zalger, 2020
 """
 import sys
 import ssl
@@ -16,46 +17,159 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from templates import alert_template, email_template
 
-requests_cache.install_cache(expire_after=1800)
+requests_cache.install_cache(expire_after=43200)
 ssl_context = ssl.create_default_context()
 
 
-def send_mail(args, config):
-    with smtplib.SMTP_SSL(host=config["mail"]["host"], port=config["mail"]["port"], context=ssl_context) as mail_server:
-        mail_server.login(config["mail"]["user"], config["mail"]["password"])
-        main_msg = MIMEMultipart()
-        main_msg['Subject'] = args["Subject"]
-        main_msg['To'] = args["To"]
-        main_msg['From'] = config["mail"]["user"]
-        main_msg.preamble = args["preamble"]
-        msg_body = MIMEText(email_template.substitute(args["msg_args"]), 'html')
-        main_msg.attach(msg_body)
-        mail_server.send_message(main_msg, config["mail"]["user"], args["To"])
-
-        
-def tail(f, poll_frequency):
-    while True:
-        where = f.tell()
-        line = f.readline()
-        if not line or line == "\n":
-            time.sleep(poll_frequency)
-            f.seek(where)
-        else:
-            yield line
-
-
+####################################################################################
 class Monitor:
     def __init__(self, config_file, logfile):
         self.config = yaml.safe_load(open(config_file, "r"))
-        self.geoip_city = geoip2.database.Reader(self.config["city_db_path"]) 
         self.logfile = logfile
         self.handlers = {"alert": self.handle_alert, "stats": self.handle_stats}
+        self.alerting = Alerting(self.config)
+        self.analysis = Analysis(self.config)
+        self.logging = Logging(self.config)
+
+    @staticmethod
+    def tail(f, poll_frequency):
+        while True:
+            where = f.tell()
+            line = f.readline()
+            if not line or line == "\n":
+                time.sleep(poll_frequency)
+                f.seek(where)
+            else:
+                yield line
+
+    def handle_ssh(self, event: dict):
+        pass
+
+    def handle_anomaly(self, event: dict):
+        pass
+
+    def handle_stats(self, event: dict):
+        pass
+
+    def handle_alert(self, event: dict):
+        """Manages parsing, logging, enrichments, and alerting of alerts"""
+        try:
+            # Enrich the alert from other sources
+            location = {"dest_location": self.analysis.get_location(event["dest_ip"]),
+                        "src_location": self.analysis.get_location(event["src_ip"])}
+
+            # If alert related to questionable WAN traffic, assess IP reputation
+            # TODO: add a mapping between categories to analysis handlers.
+            severity = event["alert"]["severity"]
+            reputation = dict(reputation="unknown", data=None)
+
+            if "dns" in event.keys():
+                domain = event["dns"]["query"][0]["rrname"]
+                if "http" in domain:
+                    domain = domain.split('//')[-1].split('/')[0]
+                reputation = self.analysis.get_reputation(domain, query_type="domain")
+            elif self.config["local_range"] not in event["src_ip"]:
+                reputation = self.analysis.get_reputation(event["src_ip"], query_type="ip")
+            elif self.config["local_range"] not in event["dest_ip"]:
+                reputation = self.analysis.get_reputation(event["dest_ip"], query_type="ip")
+            else:
+                pass
+
+            # Log To Database
+            self.logging.insert_alert(event, location, reputation)
+
+            # Trigger Alerting (ie email)
+            if severity in self.config["mail"]["alert_severity"] and (
+                    reputation == "unknown" or reputation == "poor") or reputation == "poor":
+                # TODO: Add further screening based on reputation analysis
+                self.email_alert(event, extra=reputation)
+
+        except Exception as e:
+            print("error handling alert")
+            print(e)
+
+    def email_alert(self, event, extra=None):
+        """Screen the msg based on severity prior to sending an alert email"""
+        try:
+            alert_args = event["alert"]
+            alert_args["timestamp"] = event["timestamp"]
+            alert_args["src_ip"] = event["src_ip"]
+            alert_args["dest_ip"] = event["dest_ip"]
+            alert_msg = alert_template.substitute(alert_args)
+            msg_args = {"To": self.config["mail"]["alert_user"],
+                        "Subject": "Severity %s IDS event" % event["alert"]["severity"],
+                        "preamble": "IDS event detected by suricata",
+                        "msg_args": {"msg_body": alert_msg, "extra": [extra, event]}
+                        }
+            self.alerting.send_mail(msg_args, self.config)
+        except Exception as e:
+            print("Error Emailing Alert")
+            print(e)
+            print(event)
+
+    def monitor_log(self):
+        with open(self.logfile, 'r') as f:
+            for line in self.tail(f, self.config["poll_frequency"]):
+                try:
+                    event = json.loads(line)  # type: dict
+                    event_type = event["event_type"]
+                    handler = self.handlers[event_type]
+                    handler(event)
+                except:
+                    pass
+
+
+###########################################################################################
+class Logging:
+
+    def __init__(self, config):
+        self.config = config
         self.db_con = psycopg2.connect(database=self.config["postgres"]["db_name"],
                                        user=self.config["postgres"]["user"],
                                        password=self.config["postgres"]["password"],
                                        host=self.config["postgres"]["host"],
                                        port=self.config["postgres"]["port"])
-        
+
+    def insert_alert(self, data, location, extra):
+        """
+        Inserts data into the database backend, as JSON blobs
+        data, location, and extra args should be python dictionaries
+        """
+        insert = "insert into alerts(data, location, extra) values(%s, %s, %s);"
+        cursor = self.db_con.cursor()
+        cursor.execute(insert, (json.dumps(data), json.dumps(location), json.dumps(extra)))
+        self.db_con.commit()
+        cursor.close()
+
+
+##########################################################################################
+class Alerting:
+
+    def __init__(self, config):
+        self.config = config
+
+    @staticmethod
+    def send_mail(args, config):
+        with smtplib.SMTP_SSL(host=config["mail"]["host"], port=config["mail"]["port"],
+                              context=ssl_context) as mail_server:
+            mail_server.login(config["mail"]["user"], config["mail"]["password"])
+            main_msg = MIMEMultipart()
+            main_msg['Subject'] = args["Subject"]
+            main_msg['To'] = args["To"]
+            main_msg['From'] = config["mail"]["user"]
+            main_msg.preamble = args["preamble"]
+            msg_body = MIMEText(email_template.substitute(args["msg_args"]), 'html')
+            main_msg.attach(msg_body)
+            mail_server.send_message(main_msg, config["mail"]["user"], args["To"])
+
+
+##########################################################################################
+class Analysis:
+
+    def __init__(self, config):
+        self.config = config
+        self.geoip_city = geoip2.database.Reader(self.config["city_db_path"])
+
     def get_location(self, ip):
         if self.config["local_range"] in ip:
             return self.config["default_location"]
@@ -78,12 +192,12 @@ class Monitor:
             analysis = self._analyze_domain_reputation(data)
         else:
             raise ValueError
-            
+
         if analysis is True:
             return dict(reputation="poor", data=data)
         else:
             return dict(reputation="neutral", data=data)
-        
+
     def _query_reputation(self, param, query_type="ip"):
         """
         Queries the reputation from apivoid.
@@ -102,7 +216,7 @@ class Monitor:
         except Exception as e:
             print("Error querying reputation")
             print(e)
-            
+
     def _analyze_domain_reputation(self, data):
         """
         Assess domain reputation to make hostility decision.
@@ -134,105 +248,6 @@ class Monitor:
             return True
         else:
             return False
-        
-    def handle_ssh(self, event):
-        pass
-
-    def handle_anomaly(self, event):
-        pass
-        
-    def handle_stats(self, event):
-        pass
-
-    def handle_alert(self, event):
-        """Manages parsing, logging, enrichments, and alerting of alerts"""
-        try:
-            # Enrich the alert from other sources
-            location = {"dest_location": self.get_location(event["dest_ip"]),
-                    "src_location": self.get_location(event["src_ip"])}
-
-            # If alert related to questionable WAN traffic, assess IP reputation
-            # TODO: add a mapping between categories to analysis handlers.
-            # Perhaps a separate class for analysis
-            severity = event["alert"]["severity"]
-            reputation = dict(reputation="unknown", data=None)
-
-            if "dns" in event.keys():
-                try:
-                    domain = event["dns"]["query"][0]["rrname"]
-                    if "http" in domain:
-                        domain = domain.split('//')[-1].split('/')[0]
-                    reputation = self.get_reputation(domain, query_type="domain")
-                except Exception as e:
-                    # TODO: Remove me after confirming the domain extraction
-                    print("Could not get domain reputation for event")
-                    print(e)
-            elif self.config["local_range"] not in event["src_ip"]:
-                reputation = self.get_reputation(event["src_ip"], query_type="ip")
-            elif self.config["local_range"] not in event["dest_ip"]:
-                reputation = self.get_reputation(event["dest_ip"], query_type="ip")
-            else:
-                pass
-
-            # Log To Database
-            self.insert_alert(event, location, reputation)
-
-            # Trigger Alerting (ie email)
-            if severity in self.config["mail"]["alert_severity"] and (reputation == "unknown" or reputation == "poor") or reputation == "poor":
-                # TODO: Add further screening based on reputation analysis
-                self.email_alert(event, extra=reputation)
-                
-        except Exception as e:
-            print("error handling alert")
-            print(e)
-
-    def insert_alert(self, data, location, extra):
-        """
-        Inserts data into the database backend, as JSON blobs
-        data, location, and extra args should be python dictionaries
-        """
-        try:
-            insert = "insert into alerts(data, location, extra) values(%s, %s, %s);"
-            cursor = self.db_con.cursor()
-            cursor.execute(insert, (json.dumps(data), json.dumps(location), json.dumps(extra)))
-            self.db_con.commit()
-            cursor.close()
-        except Exception as e:
-            print("Insert exception")
-            print(e)
-        
-    def email_alert(self, event, extra=None):
-        """Screen the msg based on severity prior to sending an alert email"""
-        try:
-            alert_args = event["alert"]
-            alert_args["timestamp"] = event["timestamp"]
-            alert_args["src_ip"] = event["src_ip"]
-            alert_args["dest_ip"] = event["dest_ip"]
-            alert_msg = alert_template.substitute(alert_args)
-            msg_args = {"To": self.config["mail"]["alert_user"],
-                        "Subject": "Severity %s IDS event" % event["alert"]["severity"],
-                        "preamble": "IDS event detected by suricata",
-                        "msg_args": {"msg_body": alert_msg, "extra": [extra, event]}
-                        }
-            send_mail(msg_args, self.config)
-        except Exception as e:
-            print("Error Emailing Alert")
-            print(e)
-            print(event)
-
-    def monitor_log(self):
-        with open(self.logfile, 'r') as f:
-            for line in tail(f, self.config["poll_frequency"]):
-                try:
-                    event = json.loads(line)
-                    event_type = event["event_type"]
-                    handler = self.handlers[event_type]
-                    handler(event)
-                except Exception as e:
-                    pass
-                    # print("Error monitoring log")
-                    # print(e)
-                    # print(event)
 
 
 def main(args):
@@ -241,7 +256,7 @@ def main(args):
     eve_monitor = Monitor(config_file, logfile)
     eve_monitor.monitor_log()
 
-  
+
 if __name__ == "__main__":
     args_ = sys.argv
     if len(args_) < 2:
