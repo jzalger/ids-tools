@@ -1,18 +1,26 @@
 """
 Unit Tests for ids_tools.py
 """
-from unittest import TestCase
+import tempfile
 import ids_tools
+from tests import test_events
+from unittest import TestCase
 
 
 class TestMonitoring(TestCase):
 
-    def __init__(self, config_file, log_file):
-        super().__init__()
-        self.monitor = ids_tools.Monitor(config_file, log_file)
-
     def test_tail(self):
-        pass
+        monitor = ids_tools.Monitor(None, None)
+        with tempfile.NamedTemporaryFile() as log_file:
+            log_file.write(test_events.basic_alert_json)  # Prep the test log file
+            log_lines = list()
+
+            with open(log_file.name, 'r') as f:
+                for line in monitor.tail(f, 1):
+                    log_lines.append(line)
+
+        read_data = "\n".join(log_lines)
+        self.assertEqual(test_events.basic_alert_json, read_data)
 
     def test_handle_alert(self):
         pass
@@ -26,18 +34,11 @@ class TestMonitoring(TestCase):
 
 class TestLogging(TestCase):
 
-    def setUp(self) -> None:
-        pass
-
     def test_insert_alert(self):
         pass
 
 
 class TestAnalysis(TestCase):
-
-    def __init__(self, config):
-        super().__init__()
-        self.analysis = ids_tools.Analysis(config)
 
     def test_get_location(self):
         pass
@@ -47,10 +48,6 @@ class TestAnalysis(TestCase):
 
 
 class TestAlerting(TestCase):
-
-    def __init__(self, config):
-        super().__init__()
-        self.alerting = ids_tools.Alerting(config)
 
     def test_send_email(self):
         pass

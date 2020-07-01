@@ -23,8 +23,8 @@ ssl_context = ssl.create_default_context()
 
 ####################################################################################
 class Monitor:
-    def __init__(self, config_file, logfile):
-        self.config = yaml.safe_load(open(config_file, "r"))
+    def __init__(self, config, logfile):
+        self.config = config
         self.logfile = logfile
         self.handlers = {"alert": self.handle_alert, "stats": self.handle_stats,
                          "ssh": self.handle_ssh, "anomaly": self.handle_anomaly,
@@ -246,7 +246,8 @@ class Analysis:
 def main(args):
     config_file = args[2]
     logfile = args[1]
-    eve_monitor = Monitor(config_file, logfile)
+    config = yaml.safe_load(open(config_file, "r"))
+    eve_monitor = Monitor(config, logfile)
     eve_monitor.monitor_log()
 
 
