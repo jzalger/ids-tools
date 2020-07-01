@@ -26,7 +26,9 @@ class Monitor:
     def __init__(self, config_file, logfile):
         self.config = yaml.safe_load(open(config_file, "r"))
         self.logfile = logfile
-        self.handlers = {"alert": self.handle_alert, "stats": self.handle_stats}
+        self.handlers = {"alert": self.handle_alert, "stats": self.handle_stats,
+                         "ssh": self.handle_ssh, "anomaly": self.handle_anomaly,
+                         "tftp": self.handle_tftp, "ftp": self.handle_ftp}
         self.alerting = Alerting(self.config)
         self.analysis = Analysis(self.config)
         self.logging = Logging(self.config)
@@ -43,6 +45,12 @@ class Monitor:
                 yield line
 
     def handle_ssh(self, event: dict):
+        pass
+
+    def handle_tftp(self, event: dict):
+        pass
+
+    def handle_ftp(self, event: dict):
         pass
 
     def handle_anomaly(self, event: dict):
