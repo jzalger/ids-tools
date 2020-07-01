@@ -54,18 +54,15 @@ class Monitor:
     def handle_alert(self, event: dict):
         """Manages parsing, logging, enrichments, and alerting of alerts"""
         try:
-            # Enrich the alert from other sources
+            # Attempt to geolocate the source and destination IPs
             location = {"dest_location": self.analysis.get_location(event["dest_ip"]),
                         "src_location": self.analysis.get_location(event["src_ip"])}
 
-            # If alert related to questionable WAN traffic, assess IP reputation
-            # TODO: add a mapping between categories to analysis handlers.
-            severity = event["alert"]["severity"]
+            # Assess the reputation of external IPs or domains
             reputation = dict(reputation="unknown", data=None)
-
-            if "dns" in event.keys():
+            if event["app_proto"] == "dns":
                 domain = event["dns"]["query"][0]["rrname"]
-                if "http" in domain:
+                if "http://" in domain:
                     domain = domain.split('//')[-1].split('/')[0]
                 reputation = self.analysis.get_reputation(domain, query_type="domain")
             elif self.config["local_range"] not in event["src_ip"]:
@@ -79,9 +76,9 @@ class Monitor:
             self.logging.insert_alert(event, location, reputation)
 
             # Trigger Alerting (ie email)
+            severity = event["alert"]["severity"]
             if severity in self.config["mail"]["alert_severity"] and (
                     reputation == "unknown" or reputation == "poor") or reputation == "poor":
-                # TODO: Add further screening based on reputation analysis
                 self.email_alert(event, extra=reputation)
 
         except Exception as e:
@@ -90,22 +87,17 @@ class Monitor:
 
     def email_alert(self, event, extra=None):
         """Screen the msg based on severity prior to sending an alert email"""
-        try:
-            alert_args = event["alert"]
-            alert_args["timestamp"] = event["timestamp"]
-            alert_args["src_ip"] = event["src_ip"]
-            alert_args["dest_ip"] = event["dest_ip"]
-            alert_msg = alert_template.substitute(alert_args)
-            msg_args = {"To": self.config["mail"]["alert_user"],
-                        "Subject": "Severity %s IDS event" % event["alert"]["severity"],
-                        "preamble": "IDS event detected by suricata",
-                        "msg_args": {"msg_body": alert_msg, "extra": [extra, event]}
-                        }
-            self.alerting.send_mail(msg_args, self.config)
-        except Exception as e:
-            print("Error Emailing Alert")
-            print(e)
-            print(event)
+        alert_args = event["alert"]
+        alert_args["timestamp"] = event["timestamp"]
+        alert_args["src_ip"] = event["src_ip"]
+        alert_args["dest_ip"] = event["dest_ip"]
+        alert_msg = alert_template.substitute(alert_args)
+        msg_args = {"To": self.config["mail"]["alert_user"],
+                    "Subject": "Severity %s IDS event" % event["alert"]["severity"],
+                    "preamble": "IDS event detected by suricata",
+                    "msg_args": {"msg_body": alert_msg, "extra": [extra, event]}
+                    }
+        self.alerting.send_mail(msg_args, self.config)
 
     def monitor_log(self):
         with open(self.logfile, 'r') as f:
@@ -169,6 +161,8 @@ class Analysis:
     def __init__(self, config):
         self.config = config
         self.geoip_city = geoip2.database.Reader(self.config["city_db_path"])
+        self.reputation_handlers = {"ip": self._analyze_ip_reputation,
+                                    "domain": self._analyze_domain_reputation}
 
     def get_location(self, ip):
         if self.config["local_range"] in ip:
@@ -185,13 +179,8 @@ class Analysis:
         if data is None:
             return dict(reputation="unknown", data=None)
 
-        # TODO: Shift this to a function mapping
-        if query_type == "ip":
-            analysis = self._analyze_ip_reputation(data)
-        elif query_type == "domain":
-            analysis = self._analyze_domain_reputation(data)
-        else:
-            raise ValueError
+        analyzer = self.reputation_handlers[query_type]
+        analysis = analyzer(data)
 
         if analysis is True:
             return dict(reputation="poor", data=data)
@@ -217,7 +206,7 @@ class Analysis:
             print("Error querying reputation")
             print(e)
 
-    def _analyze_domain_reputation(self, data):
+    def _analyze_domain_reputation(self, data: dict):
         """
         Assess domain reputation to make hostility decision.
         Based on the apivoid service
@@ -234,7 +223,7 @@ class Analysis:
         else:
             return False
 
-    def _analyze_ip_reputation(self, data):
+    def _analyze_ip_reputation(self, data: dict):
         """
         Assess an IP reputation response and make a hostility decision
         Based on using the apivoid service.
