@@ -1,4 +1,29 @@
-{
+"""
+Contains sample Eve JSON events for unit testing.
+"""
+import json
+
+basic_alert = {
+  "timestamp": "2009-11-24T21:27:09.534255",
+  "event_type": "alert",
+  "src_ip": "192.168.2.7",
+  "src_port": 1041,
+  "dest_ip": "x.x.250.50",
+  "dest_port": 80,
+  "proto": "TCP",
+  "alert": {
+    "action": "allowed",
+    "gid": 1,
+    "signature_id": 2001999,
+    "rev": 9,
+    "signature": "ET MALWARE BTGrab.com Spyware Downloading Ads",
+    "category": "A Network Trojan was detected",
+    "severity": 1
+  }
+}
+basic_alert_json = json.dumps(basic_alert)
+
+alert_with_dns = {
   "timestamp": "2020-06-30T22:12:55.421670-0400",
   "flow_id": 711091716321062,
   "in_iface": "eth0",
@@ -61,3 +86,4 @@
     "start": "2020-06-30T22:12:55.421670-0400"
   }
 }
+alert_with_dns_json = json.dumps(alert_with_dns)

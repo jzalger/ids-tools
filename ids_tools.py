@@ -226,7 +226,8 @@ class Analysis:
         else:
             return False
 
-    def _analyze_ip_reputation(self, data: dict):
+    @staticmethod
+    def _analyze_ip_reputation(data: dict):
         """
         Assess an IP reputation response and make a hostility decision
         Based on using the apivoid service.

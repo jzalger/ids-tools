@@ -24,6 +24,15 @@ class TestMonitoring(TestCase):
         pass
 
 
+class TestLogging(TestCase):
+
+    def setUp(self) -> None:
+        pass
+
+    def test_insert_alert(self):
+        pass
+
+
 class TestAnalysis(TestCase):
 
     def __init__(self, config):
