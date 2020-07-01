@@ -4,7 +4,6 @@ config.yaml
 *#
 *~
 # logs
-*.log
 *.out
 *.json
 
