@@ -6,7 +6,7 @@ config.yaml
 # logs
 *.out
 *.json
-
+.idea
 cache.sqlite
 # Byte-compiled / optimized / DLL files
 __pycache__/
