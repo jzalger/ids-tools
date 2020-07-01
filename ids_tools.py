@@ -1,5 +1,5 @@
 """
-alert_logging.py
+ids_tools.py
 J. Zalger, 2020
 """
 import sys
@@ -260,6 +260,6 @@ def main(args):
 if __name__ == "__main__":
     args_ = sys.argv
     if len(args_) < 2:
-        print("Usage: alert_logging.py log_filename config.yaml")
+        print("Usage: ids_tools.py log_filename config.yaml")
         sys.exit()
     main(args_)
