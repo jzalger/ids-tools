@@ -53,37 +53,32 @@ class Monitor:
 
     def handle_alert(self, event: dict):
         """Manages parsing, logging, enrichments, and alerting of alerts"""
-        try:
-            # Attempt to geolocate the source and destination IPs
-            location = {"dest_location": self.analysis.get_location(event["dest_ip"]),
-                        "src_location": self.analysis.get_location(event["src_ip"])}
+        # Attempt to geolocate the source and destination IPs
+        location = {"dest_location": self.analysis.get_location(event["dest_ip"]),
+                    "src_location": self.analysis.get_location(event["src_ip"])}
 
-            # Assess the reputation of external IPs or domains
-            reputation = dict(reputation="unknown", data=None)
-            if event["app_proto"] == "dns":
-                domain = event["dns"]["query"][0]["rrname"]
-                if "http://" in domain:
-                    domain = domain.split('//')[-1].split('/')[0]
-                reputation = self.analysis.get_reputation(domain, query_type="domain")
-            elif self.config["local_range"] not in event["src_ip"]:
-                reputation = self.analysis.get_reputation(event["src_ip"], query_type="ip")
-            elif self.config["local_range"] not in event["dest_ip"]:
-                reputation = self.analysis.get_reputation(event["dest_ip"], query_type="ip")
-            else:
-                pass
+        # Assess the reputation of external IPs or domains
+        reputation = dict(reputation="unknown", data=None)
+        if event["app_proto"] == "dns":
+            domain = event["dns"]["query"][0]["rrname"]
+            if "http://" in domain:
+                domain = domain.split('//')[-1].split('/')[0]
+            reputation = self.analysis.get_reputation(domain, query_type="domain")
+        elif self.config["local_range"] not in event["src_ip"]:
+            reputation = self.analysis.get_reputation(event["src_ip"], query_type="ip")
+        elif self.config["local_range"] not in event["dest_ip"]:
+            reputation = self.analysis.get_reputation(event["dest_ip"], query_type="ip")
+        else:
+            pass
 
-            # Log To Database
-            self.logging.insert_alert(event, location, reputation)
+        # Log To Database
+        self.logging.insert_alert(event, location, reputation)
 
-            # Trigger Alerting (ie email)
-            severity = event["alert"]["severity"]
-            if severity in self.config["mail"]["alert_severity"] and (
-                    reputation == "unknown" or reputation == "poor") or reputation == "poor":
-                self.email_alert(event, extra=reputation)
-
-        except Exception as e:
-            print("error handling alert")
-            print(e)
+        # Trigger Alerting (ie email)
+        severity = event["alert"]["severity"]
+        if severity in self.config["mail"]["alert_severity"] and (
+                reputation == "unknown" or reputation == "poor") or reputation == "poor":
+            self.email_alert(event, extra=reputation)
 
     def email_alert(self, event, extra=None):
         """Screen the msg based on severity prior to sending an alert email"""
