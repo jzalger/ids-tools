@@ -36,6 +36,8 @@ jobs:
     - name: Test with pytest
       run: |
         pipenv run pytest tests/test_ids_tools.py
-    - name: Coveralls GitHub Action
+    - name: Update Coveralls with test coverage
       uses: coverallsapp/github-action@v1.1.1
+      with:
+        github-token: ${{ secrets.github_token }}
   
