@@ -20,7 +20,8 @@ basic_alert_json = """{
     "category": "A Network Trojan was detected",
     "severity": 1
   }
-}"""
+}
+"""
 basic_alert_dict = json.loads(basic_alert_json)
 
 alert_with_dns_json = """{
