@@ -42,14 +42,27 @@ class TestLogging(TestCase):
 
 class TestAnalysis(TestCase):
 
-    @skip("Not fully implemented")
     def test_get_location(self):
-        config = {"city_db_path": "tests/MaxMind-DB/test-data/GeoIP2-City-Test.mmdb"}
+        config = {"city_db_path": "tests/MaxMind-DB/test-data/GeoIP2-City-Test.mmdb",
+                  "local_range": "192.168.",
+                  "default_location": dict(country="Canada", city="Banff", geohash="1234abc")}
         analyzer = ids_tools.Analysis(config)
+
+        # Test correct management of unavailable IPs
+        self.assertDictEqual(analyzer.get_location("1.1.1.1"), dict(country="", city="", geohash=""))
+
+        # Test correct return type of known IP
+        self.assertDictEqual(analyzer.get_location('2.125.160.216'), dict(country="United Kingdom", city="Boxford", geohash="gcpn7scc8ghq"))
+
+        # Test value in local range
+        self.assertDictEqual(analyzer.get_location("192.168.1.1"), config["default_location"])
 
     def test_get_reputation(self):
         pass
 
+    def test_query_reputation(self):
+        # should return data as a dict, or None if call not successful
+        pass
 
 class TestAlerting(TestCase):
 

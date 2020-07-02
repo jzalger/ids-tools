@@ -13,6 +13,7 @@ import yaml
 import geohash
 import psycopg2
 import geoip2.database
+import geoip2.errors
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from templates import alert_template, email_template
@@ -174,7 +175,7 @@ class Analysis:
             query = self.geoip_city.city(ip)
             ghash = geohash.encode(query.location.latitude, query.location.longitude)
             return dict(country=query.country.name, city=query.city.name, geohash=ghash)
-        except:
+        except geoip2.errors.AddressNotFoundError:
             return dict(country="", city="", geohash="")
 
     def get_reputation(self, param, query_type="ip"):
