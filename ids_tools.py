@@ -29,9 +29,6 @@ class Monitor:
         self.handlers = {"alert": self.handle_alert, "stats": self.handle_stats,
                          "ssh": self.handle_ssh, "anomaly": self.handle_anomaly,
                          "tftp": self.handle_tftp, "ftp": self.handle_ftp}
-        self.alerting = Alerting(self.config)
-        self.analysis = Analysis(self.config)
-        self.logging = Logging(self.config)
 
     @staticmethod
     def tail(f, poll_frequency):
@@ -62,8 +59,9 @@ class Monitor:
     def handle_alert(self, event: dict):
         """Manages parsing, logging, enrichments, and alerting of alerts"""
         # Attempt to geolocate the source and destination IPs
-        location = {"dest_location": self.analysis.get_location(event["dest_ip"]),
-                    "src_location": self.analysis.get_location(event["src_ip"])}
+        analysis = Analysis(self.config)
+        location = {"dest_location": analysis.get_location(event["dest_ip"]),
+                    "src_location": analysis.get_location(event["src_ip"])}
 
         # Assess the reputation of external IPs or domains
         reputation = dict(reputation="unknown", data=None)
@@ -71,16 +69,17 @@ class Monitor:
             domain = event["dns"]["query"][0]["rrname"]
             if "http://" in domain:
                 domain = domain.split('//')[-1].split('/')[0]
-            reputation = self.analysis.get_reputation(domain, query_type="domain")
+            reputation = analysis.get_reputation(domain, query_type="domain")
         elif self.config["local_range"] not in event["src_ip"]:
-            reputation = self.analysis.get_reputation(event["src_ip"], query_type="ip")
+            reputation = analysis.get_reputation(event["src_ip"], query_type="ip")
         elif self.config["local_range"] not in event["dest_ip"]:
-            reputation = self.analysis.get_reputation(event["dest_ip"], query_type="ip")
+            reputation = analysis.get_reputation(event["dest_ip"], query_type="ip")
         else:
             pass
 
         # Log To Database
-        self.logging.insert_alert(event, location, reputation)
+        logging = Logging(self.config)
+        logging.insert_alert(event, location, reputation)
 
         # Trigger Alerting (ie email)
         severity = event["alert"]["severity"]
@@ -100,7 +99,8 @@ class Monitor:
                     "preamble": "IDS event detected by suricata",
                     "msg_args": {"msg_body": alert_msg, "extra": [extra, event]}
                     }
-        self.alerting.send_mail(msg_args, self.config)
+        alerting = Alerting(self.config)
+        alerting.send_mail(msg_args, self.config)
 
     def monitor_log(self):
         with open(self.logfile, 'r') as f:
