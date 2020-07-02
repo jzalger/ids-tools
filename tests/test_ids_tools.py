@@ -61,6 +61,9 @@ class TestAnalysis(TestCase):
     def test_get_reputation(self):
         pass
 
+    def test_analyze_domain_reputation(self):
+        analyzer = ids_tools.Analysis({})
+    
     def test_query_reputation(self):
         # Define a mock function for the request
         def mocked_reputation_query(*args, **kwargs):
