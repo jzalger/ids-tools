@@ -197,18 +197,18 @@ class Analysis:
         param should be a string (ip, domain name, etc)
         report_type = ip | domain
         """
-        try:
-            cfg = self.config["apivoid"]
-            url = cfg["url"][query_type] % (cfg["key"], param)
-            r = requests.get(url=url)
-            data = r.json()
-            if data["success"]:
-                return data
-            else:
-                return None
-        except Exception as e:
-            print("Error querying reputation")
-            print(e)
+        assert isinstance(param, str), "query reputation parameter must be string"
+        
+        cfg = self.config["apivoid"]
+        url = cfg["url"][query_type] % (cfg["key"], param)
+        r = requests.get(url=url)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        if data["success"]:
+            return data
+        else:
+            return None
 
     def _analyze_domain_reputation(self, data: dict):
         """
