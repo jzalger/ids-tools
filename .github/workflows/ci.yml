@@ -33,9 +33,9 @@ jobs:
         pipenv run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Checkout Submodules
       uses: textbook/git-checkout-submodule-action@master
-    - name: Test with pytest
+    - name: Test with pytest and coverage
       run: |
-        pipenv run pytest tests/test_ids_tools.py
+        pipenv run coverage run -m pytest tests/test_ids_tools.py
     - name: Update Coveralls with test coverage
       uses: coverallsapp/github-action@v1.1.1
       with:
