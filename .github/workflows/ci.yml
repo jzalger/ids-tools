@@ -35,7 +35,7 @@ jobs:
       uses: textbook/git-checkout-submodule-action@master
     - name: Test with pytest and coverage
       run: |
-        pipenv run pytest --cov=./ tests/test_ids_tools.py
+        pipenv run pytest --cov=ids_tools --cov-report xml tests/test_ids_tools.py
     - name: Codecov
       uses: codecov/codecov-action@v1.0.10
  
