@@ -254,7 +254,7 @@ def main(args):
 
 if __name__ == "__main__":
     args_ = sys.argv
-    if len(args_) < 2:
+    if len(args_) < 3:
         print("Usage: ids_tools.py log_filename config.yaml")
         sys.exit()
     main(args_)
