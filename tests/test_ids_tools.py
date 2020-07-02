@@ -43,6 +43,7 @@ class TestLogging(TestCase):
 class TestAnalysis(TestCase):
 
     def test_get_location(self):
+
         config = {"city_db_path": "tests/MaxMind-DB/test-data/GeoIP2-City-Test.mmdb",
                   "local_range": "192.168.",
                   "default_location": dict(country="Canada", city="Banff", geohash="1234abc")}
