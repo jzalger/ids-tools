@@ -11,7 +11,7 @@ class TestMonitoring(TestCase):
 
     def test_tail(self):
         monitor = ids_tools.Monitor(None, None)
-        with tempfile.NamedTemporaryFile() as log_file:
+        with tempfile.NamedTemporaryFile(mode="w") as log_file:
             log_file.write(test_events.basic_alert_json)  # Prep the test log file
             log_lines = list()
 
