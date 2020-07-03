@@ -42,40 +42,50 @@ class TestLogging(TestCase):
 
 class TestAnalysis(TestCase):
 
+    def setUp(self) -> None:
+        self.config = {"city_db_path": "tests/MaxMind-DB/test-data/GeoIP2-City-Test.mmdb",
+                       "local_range": "192.168.",
+                       "suspect_countries": ["Latvia"],
+                       "default_location": dict(country="Canada", city="Banff", geohash="1234abc")}
+        self.analyzer = ids_tools.Analysis(self.config)
+
     def test_get_location(self):
-
-        config = {"city_db_path": "tests/MaxMind-DB/test-data/GeoIP2-City-Test.mmdb",
-                  "local_range": "192.168.",
-                  "default_location": dict(country="Canada", city="Banff", geohash="1234abc")}
-        analyzer = ids_tools.Analysis(config)
-
         # Test correct management of unavailable IPs
-        self.assertDictEqual(analyzer.get_location("1.1.1.1"), dict(country="", city="", geohash=""))
+        self.assertDictEqual(self.analyzer.get_location("1.1.1.1"), dict(country="", city="", geohash=""))
 
         # Test correct return type of known IP
-        self.assertDictEqual(analyzer.get_location('2.125.160.216'), dict(country="United Kingdom", city="Boxford", geohash="gcpn7scc8ghq"))
+        self.assertDictEqual(self.analyzer.get_location('2.125.160.216'),
+                             dict(country="United Kingdom", city="Boxford", geohash="gcpn7scc8ghq"))
 
         # Test value in local range
-        self.assertDictEqual(analyzer.get_location("192.168.1.1"), config["default_location"])
+        self.assertDictEqual(self.analyzer.get_location("192.168.1.1"), self.config["default_location"])
 
     def test_get_reputation(self):
-        pass
+        # Test a clean domain (add clean domain sample)
+        self.assertFalse(self.analyzer._analyze_domain_reputation(test_reputations.clean_domain_response_dict))
+
+        # Test a domain with blacklist hits
+        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.blacklist_domain_response_dict))
+
+        # Test a domain with strange anonymity ties (add sample)
+        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.anon_domain_response_dict))
+
+        # Test suspect country sample
+        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.suspect_country_domain_response))
 
     def test_analyze_domain_reputation(self):
-        config = {"city_db_path": "tests/MaxMind-DB/test-data/GeoIP2-City-Test.mmdb", "suspect_countries": []}
-        analyzer = ids_tools.Analysis(config)
+        # Test a clean domain (add clean domain sample)
+        self.assertFalse(self.analyzer._analyze_domain_reputation(test_reputations.clean_domain_response_dict))
 
-        # TODO: Test a clean domain (add clean domain sample)
-        # self.assertIsFalse(analyzer._analyze_domain_reputation(test_reputations.clean_domain_reputation_response_dict))
-        
         # Test a domain with blacklist hits
-        self.assertTrue(analyzer._analyze_domain_reputation(test_reputations.basic_domain_reputation_response_dict))
+        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.blacklist_domain_response_dict))
 
-        # TODO: Test a domain with strange anonymity ties (add sample)
-        # self.assertIsTrue(analyzer._analyze_domain_reputation(test_reputaitons.anon_domain_reputation_response_dict))
+        # Test a domain with strange anonymity ties (add sample)
+        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.anon_domain_response_dict))
 
-        # TODO: Test suspect country sammple
-        
+        # Test suspect country sample
+        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.suspect_country_domain_response))
+
     def test_query_reputation(self):
         # Define a mock function for the request
         def mocked_reputation_query(*args, **kwargs):
@@ -84,6 +94,7 @@ class TestAnalysis(TestCase):
                 def __init__(self, data, status):
                     self.data = data
                     self.status_code = status
+
                 def json(self):
                     return self.data
 
@@ -95,10 +106,10 @@ class TestAnalysis(TestCase):
                 return MockResponse({}, 500)
             elif "122.226.181.165" in kwargs["url"]:
                 # Test valid IP reputation response
-                return MockResponse(test_reputations.basic_ip_reputation_response_dict, 200)
+                return MockResponse(test_reputations.clean_ip_response_dict, 200)
             elif "google.com" in kwargs["url"]:
                 # Test valid domain response
-                return MockResponse(test_reputations.basic_domain_reputation_response_dict, 200)
+                return MockResponse(test_reputations.clean_domain_response_dict, 200)
 
         # Setup the testcase with mocked request function
         with mock.patch('requests.get', side_effect=mocked_reputation_query):
@@ -109,10 +120,12 @@ class TestAnalysis(TestCase):
             analyzer = ids_tools.Analysis(config)
 
             # Test nominal IP case
-            self.assertDictEqual(analyzer._query_reputation("122.226.181.165", query_type="ip"), test_reputations.basic_ip_reputation_response_dict)
+            self.assertDictEqual(analyzer._query_reputation("122.226.181.165", query_type="ip"),
+                                 test_reputations.clean_ip_response_dict)
 
             # Test domain query
-            self.assertDictEqual(analyzer._query_reputation("google.com", query_type="domain"), test_reputations.basic_domain_reputation_response_dict)
+            self.assertDictEqual(analyzer._query_reputation("google.com", query_type="domain"),
+                                 test_reputations.clean_domain_response_dict)
 
             # Test param not string
             with self.assertRaises(AssertionError):
