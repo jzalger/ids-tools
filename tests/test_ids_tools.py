@@ -67,11 +67,11 @@ class TestAnalysis(TestCase):
         # Test a domain with blacklist hits
         self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.blacklist_domain_response_dict))
 
-        # Test a domain with strange anonymity ties (add sample)
+        # Test a domain with strange anonymity ties
         self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.anon_domain_response_dict))
 
         # Test suspect country sample
-        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.suspect_country_domain_response))
+        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.suspect_country_domain_response_dict))
 
     def test_analyze_domain_reputation(self):
         # Test a clean domain (add clean domain sample)
@@ -84,7 +84,7 @@ class TestAnalysis(TestCase):
         self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.anon_domain_response_dict))
 
         # Test suspect country sample
-        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.suspect_country_domain_response))
+        self.assertTrue(self.analyzer._analyze_domain_reputation(test_reputations.suspect_country_domain_response_dict))
 
     def test_query_reputation(self):
         # Define a mock function for the request
