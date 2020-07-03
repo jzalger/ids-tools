@@ -540,7 +540,7 @@ basic_domain_reputation_response = """
             "engines":{
                "4":{
                   "engine":"AntiSocial Blacklist",
-                  "detected":false,
+                  "detected": true,
                   "reference":"https:\/\/theantisocialengineer.com\/",
                   "confidence":"high",
                   "elapsed":"0.00"
@@ -596,7 +596,7 @@ basic_domain_reputation_response = """
                },
                "12":{
                   "engine":"CyberCrime",
-                  "detected":false,
+                  "detected":true,
                   "reference":"http:\/\/cybercrime-tracker.net\/",
                   "confidence":"high",
                   "elapsed":"0.00"
@@ -847,7 +847,7 @@ basic_domain_reputation_response = """
                   "elapsed":"0.00"
                }
             },
-            "detections":0,
+            "detections":2,
             "engines_count":44,
             "detection_rate":"0%",
             "scantime":"0.03"

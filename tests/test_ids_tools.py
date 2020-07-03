@@ -16,7 +16,7 @@ class TestMonitoring(TestCase):
             log_file.write(test_events.basic_alert_json)  # Prep the test log
             log_lines = list()
 
-            #FIXME: How to test a function with a while True?
+            # FIXME: How to test a function with a while True?
             with open(log_file.name, 'r') as f:
                 for line in monitor.tail(f, 1):
                     log_lines.append(line)
@@ -62,8 +62,20 @@ class TestAnalysis(TestCase):
         pass
 
     def test_analyze_domain_reputation(self):
-        analyzer = ids_tools.Analysis({})
-    
+        config = {"city_db_path": "tests/MaxMind-DB/test-data/GeoIP2-City-Test.mmdb", "suspect_countries": []}
+        analyzer = ids_tools.Analysis(config)
+
+        # TODO: Test a clean domain (add clean domain sample)
+        # self.assertIsFalse(analyzer._analyze_domain_reputation(test_reputations.clean_domain_reputation_response_dict))
+        
+        # Test a domain with blacklist hits
+        self.assertTrue(analyzer._analyze_domain_reputation(test_reputations.basic_domain_reputation_response_dict))
+
+        # TODO: Test a domain with strange anonymity ties (add sample)
+        # self.assertIsTrue(analyzer._analyze_domain_reputation(test_reputaitons.anon_domain_reputation_response_dict))
+
+        # TODO: Test suspect country sammple
+        
     def test_query_reputation(self):
         # Define a mock function for the request
         def mocked_reputation_query(*args, **kwargs):
@@ -99,7 +111,7 @@ class TestAnalysis(TestCase):
             # Test nominal IP case
             self.assertDictEqual(analyzer._query_reputation("122.226.181.165", query_type="ip"), test_reputations.basic_ip_reputation_response_dict)
 
-            # Test nominal domain case
+            # Test domain query
             self.assertDictEqual(analyzer._query_reputation("google.com", query_type="domain"), test_reputations.basic_domain_reputation_response_dict)
 
             # Test param not string
