@@ -1,13 +1,13 @@
-# ids-tools
+# ids-tools :mag::lock:
 
 ![CI](https://github.com/jzalger/ids-tools/workflows/CI/badge.svg?branch=dev)
 ![GitHub](https://img.shields.io/github/license/jzalger/ids-tools)
-![GitHub Pipenv locked Python version (branch)](https://img.shields.io/github/pipenv/locked/python-version/jzalger/ids-tools/dev)
-[![codecov](https://codecov.io/gh/jzalger/ids-tools/branch/dev/graph/badge.svg)](https://codecov.io/gh/jzalger/ids-tools)
+![GitHub Pipenv locked Python version (branch)](https://img.shields.io/github/pipenv/locked/python-version/jzalger/ids-tools/master)
+[![codecov](https://codecov.io/gh/jzalger/ids-tools/branch/master/graph/badge.svg)](https://codecov.io/gh/jzalger/ids-tools)
 
 This project provides a set of simple and lightweight logging and analysis utilities for the [Suricata](https://suricata-ids.org) network intrusion detection system (IDS). With ids-tools you can monitor your suricate json logs for events and alerts, log them to a Postgres database and perform automated location and IP or domain reputation inspection.
 
-# Main Dependencies
+## Main Dependencies
 Most of the project uses the standard Python library or common dependencies. However for the full stack experience, the following services are used to enrich event data or to enhance visualization.
 
 1. [Maxmind GeoIP](https://maxmind.com/geoip) is used for geolocating logged IP addresses. Although an account is needed, an offline database can be downloaded avoiding constant API calls. A lower precision database is available at no cost.
@@ -18,5 +18,5 @@ Most of the project uses the standard Python library or common dependencies. How
 
 4. [Grafana](https://grafana.com) is a visualization platform used to build a comprehensive network security dashboard.
 
-# Project Development Workflow
+## Project Development Workflow
 The toolsuite is developed in Python and leverages Github actions for CI/CD. Pytest is used for unittests and CodeCov for coverage. Environments and deployent is managed with Pipenv.
